@@ -1,20 +1,20 @@
 // to-do: testing and handle disconnect
 var socket = io.connect();
 
-var playerObj, playerObjID, head;
+var playerObj, playerObjID, head, particlePackage, enemyObjPackage;
 var alternator = true;
-var particles = [];
 // var particlePackage = [];
 var players = [];
 var difficulty = 40;
 var hit = false;
 var colorCounter = 0;
 var clearer = true;
-var enemyObjPackage;
 
 
 function setup() {
 	var myCanvas = createCanvas(600, 400);
+	particlePackage = null;
+	enemyObjPackage = null;
 	myCanvas.parent("canvas");
 	frameRate(30);
 	playerObj = new Player("bottom");
@@ -23,6 +23,16 @@ function setup() {
 
 function randomWholeNum(range) {
 	return Math.floor(Math.random() * range);
+}
+
+function searcher(node) {
+	if (node == null) {
+		return null;
+	}
+	if (node.next == null) {
+		return node;
+	}
+	return searcher(node.next);
 }
 
 function draw() 
@@ -37,20 +47,18 @@ function draw()
 		enemyObjPackage = null;
 	}
 
-	// if (particlePackage != null) {
-	// 	for (var i = 0; i < particlePackage.length; i++) {
-	// 		var adder = particlePackage[i];
-	// 		var additive = new Particle(adder.x-25, adder.color, adder.direction);
-	// 		particles.push(additive);
-	// 	}
-	// 	particlePackage = null;
-	// }
+	if (particlePackage != null) {
+		var node = head;
+		var last = searcher(node);
+		var adder = particlePackage;
+		var additive = new Particle(adder.x-25, adder.color, adder.direction);
+		last.next = additive;
+		additive.previous = last;
+		particlePackage = null;
+	}
 
 	if (playerObj.lives > 0) 
 	{
-		if (colorCounter >= 10){
-			playerObj.color = "blue";
-		}
 		background('black');
 
 		if (keyIsDown(LEFT_ARROW) && (playerObj.x - 10 >= 0)) {
@@ -61,65 +69,52 @@ function draw()
 			playerObj.x += 10;
 		}
 
-		for (var i = 0; i < players.length; i++) players[i].display();
+		for (var i = 0; i < players.length; i++) {
+
+			if (colorCounter >= 10) {
+				players[i].color = "blue";
+			}
+			players[i].display();
+		}
 
 		var node = head.next;
 		var current = node;
 		while (current != null)
 		{
-			var checker = false;
 			var next = current.next;
-			particles.push(current);
 			current.update();
 			current.display();
-			hit = collideRectCircle(playerObj.x, playerObj.y, playerObj.sizeX, playerObj.sizeY, current.x, current.y, current.size);
-			if (hit) {
-				colorCounter = 0;
-				playerObj.color = current.color;
-				playerObj.interaction(playerObj.color);
-				current.size = 0;
-				current.previous.next = next;
-				next.previous = current.previous;
-				checker = true;
-			}
-			if (current.y > height || node.y < 0) {
-				current.previous.next = next;
-				next.previous = current.previous;
-				checker = true;
-			}
-			if (checker) {
-				var thisJuan = current;
-				current = current.next;
-				thisJuan = null;
-				delete thisJuan;
-			} else current = current.next;
-			checker = false;
-		}
-		while(node != null)
-		{
-			var checker = false;
-			var current = node;
-			var next = node.next;
-			current.update();
-			current.display();
-			hit = collideRectCircle(playerObj.x, playerObj.y, playerObj.sizeX, playerObj.sizeY, current.x, current.y, current.size);
-			if (hit) {
-				colorCounter = 0;
-				playerObj.color = current.color;
-				playerObj.interaction(playerObj.color);
-				current.size = 0;
-				current.previous.next = next;
-				next.previous = current.previous;
-				checker = true;
-			}
-			if (current.y > height || node.y < 0) {
-				current.previous.next = next;
-				next.previous = current.previous;
-				checker = true;
-			}
-			node = next;
-			if (checker) {current = null};
-			checker = false;
+			
+			for (var i = 0; i < players.length; i++) {
+				hit = collideRectCircle(players[i].x, players[i].y, players[i].sizeX, players[i].sizeY, current.x, current.y, current.size);
+				if (hit) {
+					colorCounter = 0;
+					players[i].color = current.color;
+					players[i].interaction(players[i].color);
+					if (current.next == null) {
+						current.size = 0;
+						current = null;
+						break;
+					} else {
+						current.previous.next = next;
+						next.previous = current.previous;
+					}
+				}
+				if (current.y > height || node.y < 0) {
+					if (current.next == null) {
+						current = null;
+						break;
+					} else {
+						current.previous.next = next;
+						next.previous = current.previous;
+					}
+				}
+			}	
+
+			if (current == null) break;	
+			
+			current = current.next;
+
 		}
 		colorCounter++;
 		document.getElementById('points').innerHTML = "Points: " + playerObj.points;
@@ -133,31 +128,33 @@ function draw()
 		text("GAME OVER! Press any key to try again", 10, 150);
 		fill(255);
 		if (keyIsPressed === true) {
-			playerObj = new Player();
+			playerObj = new Player("bottom");
 			clearer = true;
 		}
 	}
 
-	var screenData = {
-		"player": playerObj,
-		"particleHead": head,
-		"screenHeight": height
-	};
-
-	socket.emit('screenState', screenData);
+	socket.emit('screenState', playerObj);
 
 }
 
 function keyPressed() {
   if (keyCode === 32) {
   		var particleAdd = new Particle(playerObj.x, ColorID(randomWholeNum(3)), "up");
+  		
+  		var packager = {
+  			"particle": particleAdd,
+  			"screenHeight": height
+  		};
+
+  		socket.emit('particleEmit', packager);
+
   		var node = head.next;
   		if (node == null) {
   			node = particleAdd;
   			head.next = node;
   			node.previous = head;
   		} else {
-  			while (node != null) {
+  			while (node.next != null) {
   				node = node.next;
   			}
   			node.next = particleAdd;
@@ -231,10 +228,6 @@ function Particle(xD, color, direction)
 	}
 }
 
-function sendAction(data) {
-	socket.emit('playerAction', data);
-}
-
 socket.on('connect', function() {
 	console.log("Connected");
 	playerObjID = socket.id;
@@ -256,10 +249,8 @@ socket.on('otherPlayerJoin', function(enemyObj) {
 });
 
 socket.on('screenUpdate', function(data) {
-	var otherPlayer = data.player;
+	var otherPlayer = data;
 	var finder = false;
-	var socketHead = data.head;
-	var socketNode = socketHead.next;
 	for (var i = 0; i < players.length; i++) {
 		if (players[i].id == otherPlayer.id){
 			finder = true;
@@ -269,10 +260,8 @@ socket.on('screenUpdate', function(data) {
 		}
 	}
 	if (!finder) enemyObjPackage = otherPlayer;
-	var node = head.next;
-	while(node != null)
-	{
-		if (node.next == null) node.next = socketNode;
-		node = node.next;
-	}
+});
+
+socket.on('otherParticle', function(data) {
+	particlePackage = data;
 });

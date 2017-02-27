@@ -50,24 +50,14 @@ io.sockets.on('connection',
 				console.log(data);
 				single = false;
 			}
-			// debugger;
-			var player = data.player;
-			var head = data.particleHead;
-			var height = data.screenHeight;
-			var node = head.next;
-			while(node != null)
-			{
-				debugger;
-				node.y = height - node.y;
-				if (node.direction == "up") node.direction = "down";
-				else node.direction = "up";
-				node = node.next;
-			}
-			var package = {
-				"player": player,
-				"head": head
-			};
-			socket.broadcast.emit('screenUpdate', package);
+			socket.broadcast.emit('screenUpdate', data);
+		});
+
+		socket.on('particleEmit', function(data) {
+			data.particle.y = data.screenHeight - data.particle.y;
+			if (data.particle.direction == "up") data.particle.direction = "down";
+			else data.particle.direction = "up";
+			socket.broadcast.emit('otherParticle', data.particle);
 		});
 
 		socket.on('playerJoin', function(data) {
